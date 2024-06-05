@@ -5,14 +5,19 @@ from einops import rearrange
 
 
 class LinearSelfAttention(nn.Module):
-    def __init__(self, attention_dropout=0.0):
+    def __init__(self, attention_dropout=0.0, causal=True):
         super().__init__()
         self.dropout_p = attention_dropout
+        self.causal = causal
 
     def forward(self, qkv_BxSx3xHxD):
         """Implements the multihead linear attention."""
+        S = qkv_BxSx3xHxD.shape[1]
         q_BxSxHxD, k_BxSxHxD, v_BxSxHxD = qkv_BxSx3xHxD.unbind(dim=2)
         a_BxHxSxS = torch.einsum("bthd,bshd->bhts", q_BxSxHxD, k_BxSxHxD)
+        if self.causal:
+            mask_SxS = torch.tril(torch.ones((S, S), device=a_BxHxSxS.device))
+            a_BxHxSxS = mask_SxS * a_BxHxSxS
         a_BxHxSxS = F.dropout(a_BxHxSxS, self.dropout_p if self.training else 0.0)
         out_BxSxHxD = torch.einsum("bhts,bshd->bthd", a_BxHxSxS, v_BxSxHxD)
         return out_BxSxHxD
@@ -25,14 +30,15 @@ class MHLA(nn.Module):
         num_heads: int=1,
         bias: bool=True,
         dropout: float=0.0,
-        **kwargs
+        causal: bool=True,
+        **kwargs,
     ):
         super().__init__()
         self.Wqkv = nn.Linear(d_model, 3 * d_model, bias=bias)
         self.d_model = d_model
         self.out_proj = nn.Linear(d_model, d_model)
         self.head_dim = self.d_model // num_heads
-        self.inner_attn = LinearSelfAttention(attention_dropout=dropout)
+        self.inner_attn = LinearSelfAttention(attention_dropout=dropout, causal=causal)
         self.norm = nn.GroupNorm(num_heads, d_model)
 
     def forward(self, x_BxSxHD):
