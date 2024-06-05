@@ -71,6 +71,7 @@ class OrchidOperator(nn.Module):
             dropout=0,
             bidirectional=False,  # TODO: check
             l_max=self.seq_len,
+            num_inner_mlps=1,
         )
 
         # NOTE: padding was l_conv1d - 1 in paper.
