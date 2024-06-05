@@ -6,19 +6,24 @@ factory_kwargs = {
         "num_kv_pairs": 4,
     }
 
+seq_mixers = [
+    ("LinAttn", "zoology.mixers.linattn.MHLA"),
+    ("TimeSwiGLU", "zoology.mixers.linattn.MHTimeSwiGLU"),
+]
 models = []
 for causal_bool in [True, False]:
-    models.append(ModelConfig(
-        d_model=128,
-        n_layers=2,
-        vocab_size=256,
-        max_position_embeddings=64,
-        sequence_mixer=ModuleConfig(
-            name="zoology.mixers.linattn.MHLA",
-            kwargs={"dropout": 0.1, "num_heads": 1, "causal": causal_bool},
-        ),
-        name="LinAttn",
-    ))
+    for model_name, seq_mixer_name in seq_mixers:
+        models.append(ModelConfig(
+            d_model=128,
+            n_layers=2,
+            vocab_size=256,
+            max_position_embeddings=64,
+            sequence_mixer=ModuleConfig(
+                name=seq_mixer_name,
+                kwargs={"dropout": 0.1, "num_heads": 1, "causal": causal_bool},
+            ),
+            name=model_name,
+        ))
 
 configs = []
 for model in models:
