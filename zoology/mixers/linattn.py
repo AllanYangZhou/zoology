@@ -53,18 +53,25 @@ class MHLA(nn.Module):
 
 
 class TimeSwiGLU(nn.Module):
-    def __init__(self, attention_dropout=0.0):
+    def __init__(self, attention_dropout=0.0, causal=True):
         super().__init__()
         self.dropout_p = attention_dropout
         self.silu = nn.SiLU()
+        self.causal = causal
 
     def forward(self, qkv_BxSx7xHxD):
+        S = qkv_BxSx7xHxD.shape[1]
         (q1_BxSxHxD, k1_BxSxHxD,
          q2_BxSxHxD, k2_BxSxHxD,
          q3_BxSxHxD, k3_BxSxHxD, v_BxSxHxD) = qkv_BxSx7xHxD.unbind(dim=2)
         a1_BxHxSxS = torch.einsum("bthd,bshd->bhts", q1_BxSxHxD, k1_BxSxHxD)
         a2_BxHxSxS = torch.einsum("bthd,bshd->bhts", q2_BxSxHxD, k2_BxSxHxD)
         a3_BxHxSxS = torch.einsum("bthd,bshd->bhts", q3_BxSxHxD, k3_BxSxHxD)
+        if self.causal:
+            mask_SxS = torch.tril(torch.ones((S, S), device=a1_BxHxSxS.device))
+            a1_BxHxSxS = mask_SxS * a1_BxHxSxS
+            a2_BxHxSxS = mask_SxS * a2_BxHxSxS
+            a3_BxHxSxS = mask_SxS * a3_BxHxSxS
         a1_BxHxSxS = F.dropout(a1_BxHxSxS, self.dropout_p if self.training else 0.0)
         a2_BxHxSxS = F.dropout(a2_BxHxSxS, self.dropout_p if self.training else 0.0)
         a3_BxHxSxS = F.dropout(a3_BxHxSxS, self.dropout_p if self.training else 0.0)
@@ -80,6 +87,7 @@ class MHTimeSwiGLU(nn.Module):
         num_heads: int=1,
         bias: bool=True,
         dropout: float=0.0,
+        causal: bool=True,
         **kwargs
     ):
         super().__init__()
@@ -87,7 +95,7 @@ class MHTimeSwiGLU(nn.Module):
         self.d_model = d_model
         self.out_proj = nn.Linear(d_model, d_model)
         self.head_dim = self.d_model // num_heads
-        self.inner_attn = TimeSwiGLU(attention_dropout=dropout)
+        self.inner_attn = TimeSwiGLU(attention_dropout=dropout, causal=causal)
         self.norm = nn.GroupNorm(num_heads, d_model)
 
     def forward(self, x_BxSxHD):
