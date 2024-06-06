@@ -40,6 +40,7 @@ class OrchidOperator(nn.Module):
             l_conv1d=3,
             dxt_mode="fft",
             to_out_proj=True,
+            dropout: float=0.0,
             **kwargs,
     ):
         super().__init__()
@@ -68,7 +69,7 @@ class OrchidOperator(nn.Module):
             d_model,
             order=d_filter,
             seq_len=self.seq_len,
-            dropout=0,
+            dropout=dropout,
             bidirectional=False,  # TODO: check
             l_max=self.seq_len,
             num_inner_mlps=1,

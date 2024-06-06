@@ -37,7 +37,7 @@ for model_name, seq_mixer_name in seq_mixers:
         max_position_embeddings=64,
         sequence_mixer=ModuleConfig(
             name=seq_mixer_name,
-            kwargs={"seq_len": 64},
+            kwargs={"seq_len": 64, "dropout": 0.1},
         ),
         name=model_name,
     ))
