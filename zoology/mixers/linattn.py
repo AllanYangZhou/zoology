@@ -40,6 +40,7 @@ class MHLA(nn.Module):
         self.head_dim = self.d_model // num_heads
         self.inner_attn = LinearSelfAttention(attention_dropout=dropout, causal=causal)
         self.norm = nn.GroupNorm(num_heads, d_model)
+        self.num_heads = num_heads
 
     def forward(self, x_BxSxHD):
         qkv_BxSx3HD = self.Wqkv(x_BxSxHD)
@@ -50,6 +51,9 @@ class MHLA(nn.Module):
         # independently normalize each head
         ctx_BxSxHD = torch.transpose(self.norm(torch.transpose(ctx_BxSxHD, -1, -2)), -1, -2)
         return self.out_proj(ctx_BxSxHD)
+
+    def state_size(self, **kwargs):
+        return self.head_dim * self.head_dim * self.num_heads
 
 
 class TimeSwiGLU(nn.Module):
