@@ -101,6 +101,7 @@ class MHTimeSwiGLU(nn.Module):
         self.head_dim = self.d_model // num_heads
         self.inner_attn = TimeSwiGLU(attention_dropout=dropout, causal=causal)
         self.norm = nn.GroupNorm(num_heads, d_model)
+        self.num_heads = num_heads
 
     def forward(self, x_BxSxHD):
         qkv_BxSx7HD = self.Wproj(x_BxSxHD)
@@ -111,3 +112,6 @@ class MHTimeSwiGLU(nn.Module):
         # independently normalize each head
         ctx_BxSxHD = torch.transpose(self.norm(torch.transpose(ctx_BxSxHD, -1, -2)), -1, -2)
         return self.out_proj(ctx_BxSxHD)
+
+    def state_size(self, **kwargs):
+        return 3 * self.head_dim * self.head_dim * self.num_heads

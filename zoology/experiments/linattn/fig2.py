@@ -79,8 +79,8 @@ for d_model in [64, 128]:
 
 
 # linear attention
-for d_model in [64, 128]:
-    for causal_bool in [True, False]:
+for d_model in [64, 128, 256, 512]:
+    for causal_bool in [True]:  # [True, False]:
         linattn_mixer = dict(
             name="zoology.mixers.linattn.MHLA",
             kwargs={"dropout": 0.1, "num_heads": 1, "causal": causal_bool},
@@ -123,9 +123,30 @@ for d_model in [64, 128]:
     models.append(model)
 
 
+# TimeSwiGLU
+for d_model in [64, 128, 256, 512]:
+    swiglu_mixer = dict(
+        name="zoology.mixers.linattn.MHTimeSwiGLU",
+        kwargs={"dropout": 0.1, "num_heads": 1},
+    )
+    mixer = ModuleConfig(
+        name="zoology.mixers.hybrid.Hybrid",
+        kwargs={"configs": [conv_mixer, swiglu_mixer]}
+    )
+    model = ModelConfig(
+        block_type = "TransformerBlock",
+        d_model=d_model,
+        n_layers=2,
+        sequence_mixer=mixer,
+        max_position_embeddings=0,
+        name="timeswiglu",
+        **model_factory_kwargs
+    )
+    models.append(model)
+
 # convenience for filtering out 
 # included = ["attention", "linattn", "orchid"]
-included = ["linattn"]
+included = ["timeswiglu"]
 models = [m for m in models if any([i in m.name for i in included])]
 
 
