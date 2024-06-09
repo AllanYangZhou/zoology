@@ -115,3 +115,56 @@ class MHTimeSwiGLU(nn.Module):
 
     def state_size(self, **kwargs):
         return 3 * self.head_dim * self.head_dim * self.num_heads
+
+
+class TTT(nn.Module):
+    def __init__(self, attention_dropout=0.0):
+        super().__init__()
+        self.dropout_p = attention_dropout
+
+    def forward(self, qkv_BxSx3xHxD):
+        """Implements 2 steps of TTT with linear inner loop."""
+        q_BxSxHxD, k_BxSxHxD, v_BxSxHxD = qkv_BxSx3xHxD.unbind(dim=2)
+        a_BxHxSxS = torch.tril(torch.einsum("bthd,bshd->bhts", q_BxSxHxD, k_BxSxHxD))
+        a_BxHxSxS = F.dropout(a_BxHxSxS, self.dropout_p if self.training else 0.0)
+        # mask(QK')V
+        o1_BxSxHxD = torch.einsum("bhts,bshd->bthd", a_BxHxSxS, v_BxSxHxD)
+        # mask(QK')K
+        o2_BxHxSxD = torch.einsum("bhts,bshd->bhtd", a_BxHxSxS, k_BxSxHxD)
+        # mask(QK')KK'
+        a2_BxHxSxS = torch.tril(torch.einsum("bhtd,bshd->bhts", o2_BxHxSxD, k_BxSxHxD))
+        # mask(QK')KK'V
+        o3_BxSxHxD = torch.einsum("bhts,bshd->bthd", a2_BxHxSxS, v_BxSxHxD)
+        return 2 * o1_BxSxHxD - o3_BxSxHxD
+
+
+class MHTTT(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int=1,
+        bias: bool=True,
+        dropout: float=0.0,
+        **kwargs
+    ):
+        super().__init__()
+        self.Wproj = nn.Linear(d_model, 3 * d_model, bias=bias)
+        self.d_model = d_model
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.head_dim = self.d_model // num_heads
+        self.inner_attn = TTT(attention_dropout=dropout)
+        self.norm = nn.GroupNorm(num_heads, d_model)
+        self.num_heads = num_heads
+
+    def forward(self, x_BxSxHD):
+        qkv_BxSx3HD = self.Wproj(x_BxSxHD)
+        qkv_BxSx3xHxD = rearrange(
+            qkv_BxSx3HD, "... (three h d) -> ... three h d", three=3, d=self.head_dim
+        )
+        ctx_BxSxHD = rearrange(self.inner_attn(qkv_BxSx3xHxD), "... h d -> ... (h d)")
+        # independently normalize each head
+        ctx_BxSxHD = torch.transpose(self.norm(torch.transpose(ctx_BxSxHD, -1, -2)), -1, -2)
+        return self.out_proj(ctx_BxSxHD)
+
+    def state_size(self, **kwargs):
+        return 2 * self.head_dim * self.head_dim * self.num_heads
