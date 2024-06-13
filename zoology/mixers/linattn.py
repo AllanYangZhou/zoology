@@ -125,17 +125,16 @@ class TTT(nn.Module):
     def forward(self, qkv_BxSx3xHxD):
         """Implements 2 steps of TTT with linear inner loop."""
         q_BxSxHxD, k_BxSxHxD, v_BxSxHxD = qkv_BxSx3xHxD.unbind(dim=2)
-        a_BxHxSxS = torch.tril(torch.einsum("bthd,bshd->bhts", q_BxSxHxD, k_BxSxHxD))
-        a_BxHxSxS = F.dropout(a_BxHxSxS, self.dropout_p if self.training else 0.0)
-        # mask(QK')V
-        o1_BxSxHxD = torch.einsum("bhts,bshd->bthd", a_BxHxSxS, v_BxSxHxD)
+        # mask(QK')
+        a1_BxHxSxS = torch.tril(torch.einsum("bthd,bshd->bhts", q_BxSxHxD, k_BxSxHxD))
         # mask(QK')K
-        o2_BxHxSxD = torch.einsum("bhts,bshd->bhtd", a_BxHxSxS, k_BxSxHxD)
+        o2_BxHxSxD = torch.einsum("bhts,bshd->bhtd", a1_BxHxSxS, k_BxSxHxD)
         # mask(QK')KK'
         a2_BxHxSxS = torch.tril(torch.einsum("bhtd,bshd->bhts", o2_BxHxSxD, k_BxSxHxD))
-        # mask(QK')KK'V
-        o3_BxSxHxD = torch.einsum("bhts,bshd->bthd", a2_BxHxSxS, v_BxSxHxD)
-        return 2 * o1_BxSxHxD - o3_BxSxHxD
+        a1_BxHxSxS = F.dropout(
+            2 * a1_BxHxSxS - a2_BxHxSxS,
+            self.dropout_p if self.training else 0.0)
+        return torch.einsum("bhts,bshd->bthd", a1_BxHxSxS, v_BxSxHxD)
 
 
 class MHTTT(nn.Module):
