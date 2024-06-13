@@ -35,7 +35,7 @@ data = DataConfig(
     test_configs=test_configs,
     # can pass a tuple if you want a different batch size for train and test
     batch_size=(batch_size, batch_size / 8),
-    cache_dir="/scr/ayz/zoology_cache",
+    cache_dir="/home/ayz/zoology_cache",
 )
 
 # 2. Next, we are going to collect all the different model configs we want to sweep
@@ -168,7 +168,7 @@ for d_model in [64, 128, 256, 512]:
 
 # convenience for filtering out 
 # included = ["attention", "linattn", "orchid"]
-included = ["timeswiglu"]
+included = ["ttt"]
 models = [m for m in models if any([i in m.name for i in included])]
 
 
@@ -189,7 +189,7 @@ for model in models:
             slice_keys=["num_kv_pairs"],
             sweep_id=sweep_name,
             run_id=run_id,
-            predictions_path=f"/scr/ayz/zoology_cache",
+            predictions_path=f"/home/ayz/zoology_cache",
             collect_predictions=True,
         )
         configs.append(config)
