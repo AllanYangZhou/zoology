@@ -203,7 +203,11 @@ class MHTTTWithLN(nn.Module):
         self.norm = nn.GroupNorm(num_heads, d_model)
         self.num_heads = num_heads
         self.ln = nn.LayerNorm(self.head_dim)
-        self.ttt_inner = torch.vmap(torch.vmap(get_ttt_inner(self.ln)))
+        self.ttt_inner = torch.vmap(
+            torch.vmap(get_ttt_inner(self.ln), in_dims=(None, 0, 0, 0)),
+            in_dims=(None, 0, 0, 0))
+        self.W0_DxD = nn.Parameter(torch.randn(
+            self.head_dim, self.head_dim) / self.head_dim**0.5)
 
     def forward(self, x_BxSxHD):
         qkv_BxSx3HD = self.Wproj(x_BxSxHD)
@@ -211,9 +215,7 @@ class MHTTTWithLN(nn.Module):
             qkv_BxSx3HD, "b s (three h d) -> b h three s d", three=3, d=self.head_dim
         )
         q_BxHxSxD, k_BxHxSxD, v_BxHxSxD = qkv_BxHx3xSxD.unbind(dim=2)
-        B, H, D = q_BxHxSxD.shape[0], q_BxHxSxD.shape[1], q_BxHxSxD.shape[3]
-        w0_BxHxDxD = torch.zeros((B, H, D, D), device=q_BxHxSxD.device)
-        ctx_BxHxSxD = self.ttt_inner(w0_BxHxDxD, q_BxHxSxD, k_BxHxSxD, v_BxHxSxD)
+        ctx_BxHxSxD = self.ttt_inner(self.W0_DxD, q_BxHxSxD, k_BxHxSxD, v_BxHxSxD)
         ctx_BxSxHD = rearrange(ctx_BxHxSxD, "b h s d -> b s (h d)")
         # independently normalize each head
         ctx_BxSxHD = torch.transpose(self.norm(torch.transpose(ctx_BxSxHD, -1, -2)), -1, -2)
