@@ -195,11 +195,11 @@ class MHTTTWithLN(nn.Module):
         **kwargs
     ):
         super().__init__()
+        assert not (dropout > 0.0), "dropout not supported"
         self.Wproj = nn.Linear(d_model, 3 * d_model, bias=bias)
         self.d_model = d_model
         self.out_proj = nn.Linear(d_model, d_model)
         self.head_dim = self.d_model // num_heads
-        self.inner_attn = TTT(attention_dropout=dropout)
         self.norm = nn.GroupNorm(num_heads, d_model)
         self.num_heads = num_heads
         self.ln = nn.LayerNorm(self.head_dim)
