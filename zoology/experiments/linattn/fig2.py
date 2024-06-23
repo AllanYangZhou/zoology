@@ -125,24 +125,25 @@ for d_model in [64, 128]:
 
 # TimeSwiGLU
 for d_model in [64, 128, 256, 512]:
-    swiglu_mixer = dict(
-        name="zoology.mixers.linattn.MHTimeSwiGLU",
-        kwargs={"dropout": 0.1, "num_heads": 1},
-    )
-    mixer = ModuleConfig(
-        name="zoology.mixers.hybrid.Hybrid",
-        kwargs={"configs": [conv_mixer, swiglu_mixer]}
-    )
-    model = ModelConfig(
-        block_type = "TransformerBlock",
-        d_model=d_model,
-        n_layers=2,
-        sequence_mixer=mixer,
-        max_position_embeddings=0,
-        name="timeswiglu",
-        **model_factory_kwargs
-    )
-    models.append(model)
+    for dropout in [0, 0.01, 0.5]:
+        swiglu_mixer = dict(
+            name="zoology.mixers.linattn.MHTimeSwiGLU",
+            kwargs={"dropout": dropout, "num_heads": 1},
+        )
+        mixer = ModuleConfig(
+            name="zoology.mixers.hybrid.Hybrid",
+            kwargs={"configs": [conv_mixer, swiglu_mixer]}
+        )
+        model = ModelConfig(
+            block_type = "TransformerBlock",
+            d_model=d_model,
+            n_layers=2,
+            sequence_mixer=mixer,
+            max_position_embeddings=0,
+            name="timeswiglu",
+            **model_factory_kwargs
+        )
+        models.append(model)
 
 
 # TTT
@@ -168,15 +169,15 @@ for d_model in [64, 128, 256, 512]:
 
 # convenience for filtering out 
 # included = ["attention", "linattn", "orchid"]
-included = ["ttt"]
+included = ["timeswiglu"]
 models = [m for m in models if any([i in m.name for i in included])]
 
 
 # 3. Finally we'll create a train config for each
 configs = []
 for model in models:
-    for lr in np.logspace(-3, -1.5, 4):
-        run_id = f"{model.name}-lr{lr:.1e}"
+    for lr in [1e-3]:  # np.logspace(-3, -1.5, 4):
+        run_id = f"{model.name}-d{model.d_model}-lr{lr:.1e}"
         config = TrainConfig(
             model=model,
             data=data,
