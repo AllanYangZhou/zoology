@@ -79,27 +79,25 @@ for d_model in [64, 128]:
 
 
 # linear attention
-for d_model in [64, 128, 256, 512]:
-    for causal_bool in [True, False]:
-        for dropout in [0.0, 0.1]: 
-            linattn_mixer = dict(
-                name="zoology.mixers.linattn.MHLA",
-                kwargs={"dropout": dropout, "num_heads": 1, "causal": causal_bool},
-            )
-            mixer = ModuleConfig(
-                name="zoology.mixers.hybrid.Hybrid",
-                kwargs={"configs": [conv_mixer, linattn_mixer]}
-            )
-            model = ModelConfig(
-                block_type = "TransformerBlock",
-                d_model=d_model,
-                n_layers=2,
-                sequence_mixer=mixer,
-                max_position_embeddings=0,
-                name="linattn",
-                **model_factory_kwargs
-            )
-            models.append(model)
+for d_model in [64, 128, 256, 512, 1024]:
+    linattn_mixer = dict(
+        name="zoology.mixers.linattn.MHLA",
+        kwargs={"dropout": 0.0, "num_heads": 1, "causal": True},
+    )
+    mixer = ModuleConfig(
+        name="zoology.mixers.hybrid.Hybrid",
+        kwargs={"configs": [conv_mixer, linattn_mixer]}
+    )
+    model = ModelConfig(
+        block_type = "TransformerBlock",
+        d_model=d_model,
+        n_layers=2,
+        sequence_mixer=mixer,
+        max_position_embeddings=0,
+        name="linattn",
+        **model_factory_kwargs
+    )
+    models.append(model)
 
 
 # orchid
@@ -169,14 +167,14 @@ for d_model in [64, 128, 256, 512]:
     models.append(model)
 
 # convenience for filtering out 
-included = ["linattn"]
+included = ["linattn", "ttt_ln"]
 models = [m for m in models if any([i in m.name for i in included])]
 
 
 # 3. Finally we'll create a train config for each
 configs = []
 for model in models:
-    for lr in [1e-3]:  # np.logspace(-3, -1.5, 4):
+    for lr in np.logspace(-4, -3, 3):
         run_id = f"{model.name}-d{model.d_model}-lr{lr:.1e}"
         config = TrainConfig(
             model=model,
