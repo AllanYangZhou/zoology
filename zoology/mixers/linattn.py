@@ -108,20 +108,23 @@ class MHTTT(nn.Module):
         return 2 * self.head_dim * self.head_dim * self.num_heads
 
 
-def get_ttt_inner(ln):
-    def ttt_inner_2step(W0_DxD, Q_TxD, K_TxD, V_TxD):
+def get_ttt_inner(ln, n_steps):
+    def ttt_inner(W0_DxD, Q_TxD, K_TxD, V_TxD):
         Z_TxD = K_TxD @ W0_DxD
         dy = ln(Z_TxD) - V_TxD  # y = ln(z)
-        dz1, = torch.func.vjp(ln, Z_TxD)[1](dy)
-        # K @ W1, where W1 = W0 - K.T @ dz1, with causal masking.
-        Z_TxD = Z_TxD - torch.tril(K_TxD @ K_TxD.T) @ dz1
-        dy = ln(Z_TxD) - V_TxD
-        dz2, = torch.func.vjp(ln, Z_TxD)[1](dy)
-
+        dz, = torch.func.vjp(ln, Z_TxD)[1](dy)
         A_TxT = torch.tril(Q_TxD @ K_TxD.T)
-        # Q @ (W0 - K.T @ dz1 - K.T @ dz2), with causal masking.
-        return Q_TxD @ W0_DxD + A_TxT @ (-dz1) + A_TxT @ (-dz2)
-    return ttt_inner_2step
+        out= Q_TxD @ W0_DxD + A_TxT @ (-dz)
+        for _ in range(n_steps - 1):  # updates Z_TxD and out
+            # K @ W1, where W1 = W0 - K.T @ dz1, with causal masking.
+            Z_TxD = Z_TxD - torch.tril(K_TxD @ K_TxD.T) @ dz
+            dy = ln(Z_TxD) - V_TxD
+            dz, = torch.func.vjp(ln, Z_TxD)[1](dy)
+
+            # Q @ (W0 - K.T @ dz1 - K.T @ dz2), with causal masking.
+            out = out + A_TxT @ (-dz)
+        return out
+    return ttt_inner
 
 
 class MHTTTWithLN(nn.Module):
@@ -131,6 +134,7 @@ class MHTTTWithLN(nn.Module):
         num_heads: int=1,
         bias: bool=True,
         dropout: float=0.0,
+        n_steps: int=2,
         **kwargs
     ):
         super().__init__()
@@ -143,7 +147,7 @@ class MHTTTWithLN(nn.Module):
         self.num_heads = num_heads
         self.ln = nn.LayerNorm(self.head_dim)
         self.ttt_inner = torch.vmap(
-            torch.vmap(get_ttt_inner(self.ln), in_dims=(None, 0, 0, 0)),
+            torch.vmap(get_ttt_inner(self.ln, n_steps), in_dims=(None, 0, 0, 0)),
             in_dims=(None, 0, 0, 0))
         self.W0_DxD = nn.Parameter(torch.randn(
             self.head_dim, self.head_dim) / self.head_dim**0.5)

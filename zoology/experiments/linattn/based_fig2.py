@@ -147,27 +147,28 @@ for d_model in [64, 128, 256, 512]:
 
 # TTT
 for d_model in [64, 128, 256, 512]:
-    ttt_mixer = dict(
-        name="zoology.mixers.linattn.MHTTTWithLN",
-        kwargs={"dropout": 0.0, "num_heads": 1},
-    )
-    mixer = ModuleConfig(
-        name="zoology.mixers.hybrid.Hybrid",
-        kwargs={"configs": [conv_mixer, ttt_mixer]}
-    )
-    model = ModelConfig(
-        block_type = "TransformerBlock",
-        d_model=d_model,
-        n_layers=2,
-        sequence_mixer=mixer,
-        max_position_embeddings=0,
-        name="ttt_ln",
-        **model_factory_kwargs
-    )
-    models.append(model)
+    for n_steps in [1, 2, 3]:
+        ttt_mixer = dict(
+            name="zoology.mixers.linattn.MHTTTWithLN",
+            kwargs={"dropout": 0.0, "num_heads": 1, "n_steps": n_steps},
+        )
+        mixer = ModuleConfig(
+            name="zoology.mixers.hybrid.Hybrid",
+            kwargs={"configs": [conv_mixer, ttt_mixer]}
+        )
+        model = ModelConfig(
+            block_type = "TransformerBlock",
+            d_model=d_model,
+            n_layers=2,
+            sequence_mixer=mixer,
+            max_position_embeddings=0,
+            name="ttt_ln",
+            **model_factory_kwargs
+        )
+        models.append(model)
 
 # convenience for filtering out 
-included = ["linattn", "ttt_ln"]
+included = ["ttt_ln"]
 models = [m for m in models if any([i in m.name for i in included])]
 
 
